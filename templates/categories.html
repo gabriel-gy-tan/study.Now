@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block title %}
+    History
+{% endblock %}
+
+{% block main %}
+    <h3>Categories</h3>
+    <form action="/categories" method="post">
+        <div class="mb-3 d-flex justify-content-center align-items-center gap-2">
+            <input autocomplete="off" autofocus class="form-control" name="category" placeholder="Add new category" type="text" style="width: 250px;">
+            <button class="btn btn-primary" type="submit">Add</button>
+        </div>
+    </form>
+
+    <table class="table mx-auto" style="width: auto;">
+        <thead>
+            <tr>
+                <th>Studying Categories</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for category in categories %}
+            <tr>
+                <td>
+                    {{ category["category_name"]}}
+                    
+                </td>
+                <td>
+                    <form action="/delete-category" method="post">
+                        <input name="id" type="hidden" value='{{ category["id"] }}' >
+                        <button class="btn btn-primary" type="submit">Delete</button>
+                    </form>
+                </td>
+                <td>
+                    <form action="/goupdate" method="get">
+                        <input name="id" type="hidden" value='{{ category["id"] }}' >
+                        <button class="btn btn-primary" type="submit">Update</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Finish
+{% endblock %}
+
+{% block main %}
+    <h1>Session finished</h1>
+    <h3>Studying: {{subject["category_name"]}}</h3>
+    <h3>Final time: {{final_time}}</h3>
+    <form action="/desc" method="post">
+        <textarea
+            class="form-control mx-auto"
+            name="description"
+            rows="6"
+            placeholder="What did you study?"
+            style="max-width: 600px;"
+        ></textarea>
+        <button class="btn btn-primary" type="submit">Submit</button>
+    </form>
+{% endblock %}

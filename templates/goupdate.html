@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Go update
+{% endblock %}
+
+{% block main %}
+    <h3>Update</h3>
+    <form action="/goupdate" method="post">
+        <div class="mb-3">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="update" placeholder="New category name" type="text">
+            <input name="id" type="hidden" value="{{ id }}" >
+        </div>
+        <button class="btn btn-primary" type="submit">Update</button>
+    </form>
+{% endblock %}

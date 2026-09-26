@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block title %}
+    History
+{% endblock %}
+
+{% block main %}
+    <h3>History</h3>
+
+    <table class="table mx-auto" style="width: auto;">
+        <thead>
+            <tr>
+                <th>Subjects Studied</th>
+                <th>Duration Studied</th>
+                <th>Date Studied</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for subject in subjects %}
+            <tr>
+                <td>
+                    {{ subject["category_name"] }}
+                </td>
+                <td>
+                    {{ subject["duration"] | duration }}
+                </td>
+                <td>
+                    {{ subject["created_at"] }}
+                </td>
+                <td>
+                    {{ subject["desc"]  }}
+                </td>
+                <td>
+                    <form action="/delete-session" method="post">
+                        <input name="id" type="hidden" value='{{ subject["id"] }}' >
+                        <button class="btn btn-primary" type="submit">Delete</button>
+                    </form>
+                </td>
+                
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

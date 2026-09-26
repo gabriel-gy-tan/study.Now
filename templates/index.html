@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Register
+{% endblock %}
+
+{% block main %}
+    <h1>Study Tracker</h1>
+
+    <select id="category">
+        <option value="" disabled selected>Choose Category</option>
+        {% for category in categories %}
+            <option value='{{category["id"]}}'>
+                {{ category["category_name"] }}
+            </option>
+        {% endfor %}
+    </select>
+
+    <h2 id="timer">00:00:00</h2>
+    <button id = "start">START</button>
+    <button id = "stop">STOP</button>
+    <button id = "continued">CONTINUE</button>
+    <button id = "delete">DELETE</button>
+    <button id = "finish">FINISH</button>
+    <script src="{{ url_for('static', filename='timer.js') }}"></script>
+{% endblock %}
