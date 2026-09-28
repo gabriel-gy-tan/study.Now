@@ -6,6 +6,7 @@ import subprocess
 
 import pytest
 from flask_migrate import upgrade
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session as SqlAlchemySession
 from werkzeug.security import generate_password_hash
 
@@ -65,7 +66,11 @@ def js_harness():
 
 
 @pytest.fixture(scope="session")
-def app():
+def app(clear_stale_backends):
+    # Ordered explicitly: upgrade() takes an ACCESS EXCLUSIVE lock on every
+    # table it touches, so a backend left idle in transaction by a killed run
+    # would hang the migration, and the cleanup that would have removed it
+    # cannot run until this fixture has. See clear_stale_backends.
     application = create_app("testing")
     with application.app_context():
         upgrade()
@@ -98,31 +103,39 @@ def client(app):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def clear_stale_backends(app):
+def clear_stale_backends():
     """Drop connections left behind by an earlier run that was killed.
 
     A terminated pytest process can leave a backend `idle in transaction`
-    holding locks on the tables, and the first `TRUNCATE` of this run then
-    waits forever on them. That is a hazard of a shared, network-attached
-    throwaway database rather than of the code under test, so clear it once
-    before any test runs.
+    holding locks on the tables, and both the migration and the first
+    `TRUNCATE` of this run then wait forever on them. That is a hazard of a
+    shared, network-attached throwaway database rather than of the code under
+    test.
 
-    Only ever run against the database named by `TEST_DATABASE_URL`, which
-    `config.py` refuses to build without, and which the suite treats as
-    disposable.
+    Deliberately builds its own engine from `TEST_DATABASE_URL` rather than
+    reaching for the app's. The app fixture runs `upgrade()`, which takes locks
+    of its own, so cleaning up *through* the app would put the cure behind the
+    disease: a leftover session would hang the migration before the cleanup
+    that removes it ever ran. Only ever runs against that URL, which
+    `config.py` refuses to build the testing config without and which the
+    suite treats as disposable.
     """
-    with app.app_context():
-        connection = db.engines[None].connect()
-        try:
+    dsn = os.environ.get("TEST_DATABASE_URL")
+    if not dsn:
+        return
+
+    engine = create_engine(dsn, connect_args={"connect_timeout": 10})
+    try:
+        with engine.begin() as connection:
             connection.execute(
-                db.text(
+                text(
                     "select pg_terminate_backend(pid) from pg_stat_activity "
                     "where datname = current_database() "
                     "and pid <> pg_backend_pid()"
                 )
             )
-        finally:
-            connection.close()
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(autouse=True)
@@ -194,7 +207,13 @@ def db_session(app):
             db.session.remove()
             db.engines[None] = engine
             session.close()
-            transaction.rollback()
+            # Only if there is still one to roll back. The connection can be
+            # torn down underneath us - a dropped network, or a Ctrl-C landing
+            # while a statement is in flight - and SQLAlchemy will already have
+            # deassociated the transaction by then. Rolling back a
+            # deassociated transaction accomplishes nothing and warns about it.
+            if transaction.is_active:
+                transaction.rollback()
             connection.close()
 
 
