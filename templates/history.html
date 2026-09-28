@@ -1,44 +1,144 @@
 {% extends "layout.html" %}
-{% block title %}
-    History
-{% endblock %}
+{% from "_macros.html" import icon, stat, empty_state, subject_dot %}
 
-{% block main %}
-    <h3>History</h3>
+{% block title %}History{% endblock %}
 
-    <table class="table mx-auto" style="width: auto;">
-        <thead>
-            <tr>
-                <th>Subjects Studied</th>
-                <th>Duration Studied</th>
-                <th>Date Studied</th>
-                <th>Description</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for subject in subjects %}
-            <tr>
-                <td>
-                    {{ subject["category_name"] }}
-                </td>
-                <td>
-                    {{ subject["duration"] | duration }}
-                </td>
-                <td>
-                    {{ subject["created_at"] }}
-                </td>
-                <td>
-                    {{ subject["desc"]  }}
-                </td>
-                <td>
-                    <form action="/delete-session" method="post">
-                        <input name="id" type="hidden" value='{{ subject["id"] }}' >
-                        <button class="btn btn-primary" type="submit">Delete</button>
-                    </form>
-                </td>
-                
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+{% block content %}
+
+<header class="page-head">
+    <div class="page-head__text">
+        <h1 class="h1">History</h1>
+        <p class="small muted">Every session you have saved, newest first.</p>
+    </div>
+    <a class="btn" href="/">{{ icon("play", 16) }} <span>Start a session</span></a>
+</header>
+
+{% if subjects_rows %}
+
+    <section class="grid grid--stats mb-6">
+        {{ stat("All time", stats.total | human, stats.sessions ~ " session" ~ ("s" if stats.sessions != 1 else ""), accent=True) }}
+        {{ stat("This week", stats.week | human) }}
+        {{ stat("Today", stats.today | human, stats.today_sessions ~ " session" ~ ("s" if stats.today_sessions != 1 else "")) }}
+        {% set peak = series | map(attribute="seconds") | max %}
+        {{ stat("Busiest day", (peak | human) if peak else "0m", "in the last " ~ (series | length) ~ " days") }}
+    </section>
+
+    <div class="grid grid--split mb-6">
+
+        <section class="card">
+            <div class="card__head">
+                <h2 class="h3">Last {{ series | length }} days</h2>
+                <span class="tiny">UTC</span>
+            </div>
+            <div class="bars">
+                {% for day in series %}
+                    <div class="bars__col">
+                        <span class="visually-hidden">{{ day.full_label }}: {{ day.seconds | human }}</span>
+                        <div class="bars__plot">
+                            <div class="bars__bar{% if day.seconds == 0 %} bars__bar--empty{% endif %}"
+                                 data-today="{{ 'true' if day.is_today else 'false' }}"
+                                 style="--bar: {{ (day.seconds / peak * 100) | round(1) if peak else 0 }}%"></div>
+                        </div>
+                        <span class="bars__label{% if day.is_today %} bars__label--today{% endif %}">{{ day.label }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card__head">
+                <h2 class="h3">By subject</h2>
+            </div>
+
+            {% if breakdown %}
+                <div class="split-bar" role="img" aria-label="Share of study time by subject">
+                    {% for subject in breakdown %}
+                        <span class="split-bar__seg" style="width: {{ subject.share | round(1) }}%"></span>
+                    {% endfor %}
+                </div>
+                <div class="legend">
+                    {% for subject in breakdown %}
+                        <div class="legend__row">
+                            {{ subject_dot(loop.index0) }}
+                            <span class="legend__name">{{ subject.name }}</span>
+                            <span class="legend__value">{{ subject.seconds | human }}</span>
+                        </div>
+                    {% endfor %}
+                    {% if breakdown_count > breakdown | length %}
+                        <p class="tiny mt-2">+{{ breakdown_count - breakdown | length }} more</p>
+                    {% endif %}
+                </div>
+            {% else %}
+                <p class="small muted">No subject totals yet.</p>
+            {% endif %}
+        </section>
+
+    </div>
+
+    <section class="card card--flush">
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="visually-hidden">Saved study sessions</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Subject</th>
+                        <th scope="col">Duration</th>
+                        <th scope="col">When</th>
+                        <th scope="col">Description</th>
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in subjects_rows %}
+                        <tr>
+                            <td>
+                                <span class="table__subject">
+                                    {{ subject_dot(loop.index0) }}
+                                    <span class="h3">{{ row.category.category_name }}</span>
+                                </span>
+                            </td>
+                            <td class="table__num text-strong">{{ row.duration | duration }}</td>
+                            <td class="small muted text-nowrap">{{ row.created_at.strftime("%d %b %Y, %H:%M") }}</td>
+                            <td>
+                                {% if row.description %}
+                                    <span class="table__desc">{{ row.description }}</span>
+                                {% else %}
+                                    <span class="table__desc table__desc--empty">No note</span>
+                                {% endif %}
+                            </td>
+                            <td class="table__actions">
+                                <form action="/delete-session" method="post"
+                                      data-confirm="Delete this session? This cannot be undone.">
+                                    <input name="id" type="hidden" value="{{ row.id }}">
+                                    <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+                                    <button class="btn btn--danger btn--sm" type="submit"
+                                            aria-label="Delete session: {{ row.category.category_name }} on {{ row.created_at.strftime('%d %b %Y at %H:%M:%S') }}">
+                                        {{ icon("trash", 16) }}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card__foot small muted">
+            {{ subjects_rows | length }} session{{ "" if subjects_rows | length == 1 else "s" }} on record
+        </div>
+    </section>
+
+{% else %}
+
+    <div class="card">
+        {{ empty_state(
+            mark="history",
+            title="No sessions yet",
+            text="When you finish a timer session it lands here, with the subject, how long you studied, and any note you wrote. Your daily and weekly totals build up from these rows.",
+            action_url="/",
+            action_label="Start your first session"
+        ) }}
+    </div>
+
+{% endif %}
+
 {% endblock %}

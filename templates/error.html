@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% from "_macros.html" import icon %}
+
+{% block title %}Error {{ code }}{% endblock %}
+
+{% block content %}
+
+<section class="error-page">
+    <p class="error-page__code">{{ code }}</p>
+    <h1 class="h1">{{ message }}</h1>
+    <p class="lead text-center">
+        {% if code == 404 %}
+            That page does not exist.
+        {% elif code == 403 %}
+            That belongs to a different account.
+        {% elif code == 429 %}
+            Too many attempts in a short time. Wait a moment and try again.
+        {% elif code == 413 %}
+            That request was too large to accept.
+        {% else %}
+            Something went wrong on our side. Nothing you did.
+        {% endif %}
+    </p>
+    <a class="btn btn--primary mt-2" href="/">
+        {{ icon("arrow-right", 16) }} <span>Back to study.Now()</span>
+    </a>
+</section>
+
+{% endblock %}

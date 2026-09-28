@@ -1,16 +1,40 @@
 {% extends "layout.html" %}
+{% from "_macros.html" import icon, subject_dot %}
 
-{% block title %}
-    Go update
-{% endblock %}
+{% block title %}Rename subject{% endblock %}
 
-{% block main %}
-    <h3>Update</h3>
-    <form action="/goupdate" method="post">
-        <div class="mb-3">
-            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="update" placeholder="New category name" type="text">
-            <input name="id" type="hidden" value="{{ id }}" >
+{% block body %}
+<div class="shell shell--narrow">
+
+    <a class="btn btn--quiet btn--sm mb-6" href="/categories">
+        {{ icon("arrow-right", 16) }} <span>Back to subjects</span>
+    </a>
+
+    <section class="card">
+        <div class="card__head">
+            <h1 class="h1">Rename subject</h1>
         </div>
-        <button class="btn btn-primary" type="submit">Update</button>
-    </form>
+
+        <p class="small muted mb-6 inline-subject">
+            {{ subject_dot(0) }}<span>{{ category_name }}</span>
+        </p>
+
+        <form action="/goupdate" method="post">
+            <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+            <input name="id" type="hidden" value="{{ id }}">
+
+            <div class="field">
+                <label class="field__label" for="update">New name</label>
+                <input autofocus autocomplete="off" class="input" id="update" maxlength="80"
+                       name="update" required value="{{ category_name }}">
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn--primary" type="submit">{{ icon("check", 16) }} <span>Save name</span></button>
+                <a class="btn btn--quiet" href="/categories">Cancel</a>
+            </div>
+        </form>
+    </section>
+
+</div>
 {% endblock %}

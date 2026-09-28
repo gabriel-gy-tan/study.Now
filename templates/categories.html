@@ -1,44 +1,76 @@
 {% extends "layout.html" %}
-{% block title %}
-    History
-{% endblock %}
+{% from "_macros.html" import icon, empty_state, subject_dot %}
 
-{% block main %}
-    <h3>Categories</h3>
-    <form action="/categories" method="post">
-        <div class="mb-3 d-flex justify-content-center align-items-center gap-2">
-            <input autocomplete="off" autofocus class="form-control" name="category" placeholder="Add new category" type="text" style="width: 250px;">
-            <button class="btn btn-primary" type="submit">Add</button>
+{% block title %}Subjects{% endblock %}
+
+{% block content %}
+
+<header class="page-head">
+    <div class="page-head__text">
+        <h1 class="h1">Subjects</h1>
+        <p class="small muted">Labels for the kind of work you do. Deleting one also removes its sessions.</p>
+    </div>
+</header>
+
+<div class="grid grid--split">
+
+    <section class="card">
+        <div class="card__head">
+            <h2 class="h3">Add a subject</h2>
         </div>
-    </form>
+        <form action="/categories" method="post">
+            <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+            <div class="field">
+                <label class="field__label" for="category">Subject name</label>
+                <input autocomplete="off" class="input" id="category" maxlength="80"
+                       name="category" placeholder="e.g. Organic Chemistry" required>
+                <p class="field__help">Up to 80 characters. Names are unique to your account.</p>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn--primary" type="submit">{{ icon("plus", 16) }} <span>Add subject</span></button>
+            </div>
+        </form>
+    </section>
 
-    <table class="table mx-auto" style="width: auto;">
-        <thead>
-            <tr>
-                <th>Studying Categories</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for category in categories %}
-            <tr>
-                <td>
-                    {{ category["category_name"]}}
-                    
-                </td>
-                <td>
-                    <form action="/delete-category" method="post">
-                        <input name="id" type="hidden" value='{{ category["id"] }}' >
-                        <button class="btn btn-primary" type="submit">Delete</button>
-                    </form>
-                </td>
-                <td>
-                    <form action="/goupdate" method="get">
-                        <input name="id" type="hidden" value='{{ category["id"] }}' >
-                        <button class="btn btn-primary" type="submit">Update</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <section class="card card--flush">
+        <div class="card__head card__head--bordered">
+            <h2 class="h3">Your subjects</h2>
+            <span class="badge badge--muted">{{ categories | length }}</span>
+        </div>
+
+        {% if categories %}
+            <ul>
+                {% for category in categories %}
+                    <li class="row row--between list-row">
+                        <span class="row gap-2">
+                            {{ subject_dot(loop.index0) }}
+                            <span class="h3">{{ category.category_name }}</span>
+                        </span>
+                        <span class="row gap-2">
+                            <a class="btn btn--quiet btn--sm" href="/goupdate?id={{ category.id }}">
+                                {{ icon("pencil", 16) }} <span>Rename</span>
+                            </a>
+                            <form action="/delete-category" method="post"
+                                  data-confirm="Delete &quot;{{ category.category_name }}&quot;? Its sessions will be removed too.">
+                                <input name="id" type="hidden" value="{{ category.id }}">
+                                <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+                                <button aria-label="Delete {{ category.category_name }}" class="btn btn--danger btn--sm" type="submit">
+                                    {{ icon("trash", 16) }}
+                                </button>
+                            </form>
+                        </span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            {{ empty_state(
+                mark="layers",
+                title="Nothing here yet",
+                text="Add your first subject on the left, then use it from the focus timer."
+            ) }}
+        {% endif %}
+    </section>
+
+</div>
+
 {% endblock %}

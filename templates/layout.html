@@ -1,87 +1,84 @@
 <!DOCTYPE html>
-
 <html lang="en">
 
-    <head>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1, width=device-width">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="description" content="Track your study sessions by subject and see where your time actually goes.">
+    <meta name="color-scheme" content="light">
+    <link href="/static/favicon.svg" rel="icon" type="image/svg+xml">
+    <link href="/static/styles.css" rel="stylesheet">
+    <title>{% block title %}study.Now(){% endblock %}</title>
+</head>
 
-        <meta charset="utf-8">
-        <meta name="viewport" content="initial-scale=1, width=device-width">
+<body data-timer-user="{{ session.get('user_id') or '' }}">
 
-        <!-- http://getbootstrap.com/docs/5.3/ -->
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+<a class="skip-link" href="#main">Skip to content</a>
 
-        <!-- https://favicon.io/emoji-favicons/money-bag/ -->
-        <link href="/static/favicon.ico" rel="icon">
+<header class="topbar">
+    <div class="shell topbar__inner">
+        <a class="brand" href="/">
+            <span class="brand__dot"></span>
+            <span>study.Now()</span>
+        </a>
 
-        <link href="/static/styles.css" rel="stylesheet">
+        <button aria-controls="primary-nav" aria-expanded="false" aria-label="Toggle navigation"
+                class="nav-toggle" data-nav-toggle type="button">
+            <span class="nav-toggle__bars"></span>
+        </button>
 
-        <title>study.Now(): {% block title %}{% endblock %}</title>
-
-    </head>
-
-    <body>
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-danger text-center" role="alert">
-                        {{ message }}
-                    </div>
-                {% endfor %}
+        <nav aria-label="Primary" class="nav" data-nav data-open="false" id="primary-nav">
+            {% if session["user_id"] %}
+                <a class="nav__link" href="/"
+                   {% if request.endpoint == "timer.index" %}aria-current="page"{% endif %}>Focus</a>
+                <a class="nav__link" href="/history"
+                   {% if request.endpoint == "timer.history" %}aria-current="page"{% endif %}>History</a>
+                <a class="nav__link" href="/categories"
+                   {% if request.endpoint in ("categories.categories", "categories.goupdate") %}aria-current="page"{% endif %}>Subjects</a>
+                <span class="nav__divider"></span>
+                <a class="nav__link" href="/logout">Log out</a>
+            {% else %}
+                <a class="nav__link" href="/login"
+                   {% if request.endpoint == "auth.login" %}aria-current="page"{% endif %}>Log in</a>
+                <a class="nav__link" href="/register"
+                   {% if request.endpoint == "auth.register" %}aria-current="page"{% endif %}>Create account</a>
             {% endif %}
-        {% endwith %}
-
-        <nav class="bg-light border navbar navbar-expand-md navbar-light">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="/"><span class="blue">study.Now()</a>
-                <button aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation" class="navbar-toggler" data-bs-target="#navbar" data-bs-toggle="collapse" type="button">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbar">
-                    {% if session["user_id"] %}
-                        <ul class="navbar-nav me-auto mt-2">
-                            <li class="nav-item"><a class="nav-link" href="/history">History</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/categories">Categories</a></li>
-                        </ul>
-                        <ul class="navbar-nav ms-auto mt-2">
-                            <li class="nav-item"><a class="nav-link" href="/logout">Log Out</a></li>
-                        </ul>
-                    {% else %}
-                        <ul class="navbar-nav ms-auto mt-2">
-                            <li class="nav-item"><a class="nav-link" href="/register">Register</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/login">Log In</a></li>
-                        </ul>
-                    {% endif %}
-                </div>
-            </div>
         </nav>
+    </div>
+</header>
 
-        
+<main class="page" id="main">
+    {% block body %}
+        <div class="shell">
+            {% block content %}{% endblock %}
+        </div>
+    {% endblock %}
+</main>
 
-        <main class="container py-5 text-center">
-            {% block main %}{% endblock %}
-        </main>
+<footer class="app-footer">
+    <div class="shell">
+        <span>study.Now() &middot; a calmer way to track study time</span>
+        <span>Signed in as <strong>{{ session.get("username") or "guest" }}</strong></span>
+    </div>
+</footer>
 
-        <footer class="mb-5">
-            <form action="https://validator.w3.org/check" class="text-center" enctype="multipart/form-data" method="post" target="_blank">
-                <input name="doctype" type="hidden" value="HTML5">
-                <input name="fragment" type="hidden">
-                
-            </form>
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    // Adapted from https://stackoverflow.com/a/10162353
-                    const html = '<!DOCTYPE ' +
-                    document.doctype.name +
-                    (document.doctype.publicId ? ' PUBLIC "' + document.doctype.publicId + '"' : '') +
-                    (!document.doctype.publicId && document.doctype.systemId ? ' SYSTEM' : '') +
-                    (document.doctype.systemId ? ' "' + document.doctype.systemId + '"' : '') +
-                    '>\n' + document.documentElement.outerHTML;
-                    document.querySelector('form[action="https://validator.w3.org/check"] > input[name="fragment"]').value = html;
-                });
-            </script>
-        </footer>
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="alerts" role="region" aria-label="Notifications">
+            {% for message in messages %}
+                <div class="alert alert--error" role="alert">
+                    <span>{{ message }}</span>
+                    <button aria-label="Dismiss" class="alert__close" type="button">&times;</button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
 
-    </body>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+
+</body>
 
 </html>

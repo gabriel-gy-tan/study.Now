@@ -1,0 +1,16 @@
+Flask==3.1.3
+Werkzeug==3.1.8
+Flask-SQLAlchemy==3.1.1
+SQLAlchemy==2.1.1
+alembic==1.20.0
+Flask-Migrate==4.1.0
+psycopg[binary]==3.3.6
+Flask-WTF==1.3.0
+Flask-Limiter==4.1.1
+python-dotenv==1.2.3
+gunicorn==26.2.0
+pytest==9.1.1
+pytest-cov==7.1.0
+# Already relied on by the suite's config; pinned here so a fresh install does
+# not drop it and turn a hung test into a hang.
+pytest-timeout==2.4.0

@@ -1,18 +1,45 @@
 {% extends "layout.html" %}
+{% from "_macros.html" import icon %}
 
-{% block title %}
-    Log in
-{% endblock %}
+{% block title %}Log in{% endblock %}
 
-{% block main %}
-    <h3>Login</h3>
-    <form action="/login" method="post">
-        <div class="mb-3">
-            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="username" placeholder="Username" type="text">
+{% block body %}
+<div class="shell shell--narrow">
+
+    <section class="card">
+        <div class="card__head">
+            <h1 class="h1">Welcome back</h1>
         </div>
-        <div class="mb-3">
-            <input class="form-control mx-auto w-auto" name="password" placeholder="Password" type="password">
-        </div>
-        <button class="btn btn-primary" type="submit">Log In</button>
-    </form>
+        <p class="small muted mb-6">Log in to pick up your subjects and saved sessions.</p>
+
+        <form action="/login" method="post">
+            <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+
+            <div class="stack">
+                <div class="field">
+                    <label class="field__label" for="username">Username</label>
+                    <input autocomplete="username" autofocus class="input" id="username"
+                           name="username" required type="text">
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="password">Password</label>
+                    <input autocomplete="current-password" class="input" id="password"
+                           name="password" required type="password">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn--primary btn--block btn--lg" type="submit">Log in</button>
+            </div>
+        </form>
+
+        <hr class="divider">
+
+        <p class="small muted text-center">
+            No account yet? <a class="link-accent" href="/register">Create one</a>
+        </p>
+    </section>
+
+</div>
 {% endblock %}

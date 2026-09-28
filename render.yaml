@@ -1,0 +1,52 @@
+# Render Blueprint for study.Now().
+#
+# The database is external (Neon), so it is not declared under `databases:`.
+# DATABASE_URL is `sync: false`, meaning it is pasted into the Render dashboard
+# once rather than committed here. Two things follow from that: the production
+# connection string never lands in the repository, and it cannot be confused
+# with TEST_DATABASE_URL, which the test suite TRUNCATEs between tests.
+#
+# Production must use Neon's *pooled* endpoint (the hostname containing
+# `-pooler`). Render keeps several connections open across a deploy, which is
+# exactly what a direct endpoint is rate limited against.
+services:
+  - type: web
+    name: studynow
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Two places, deliberately.
+    #
+    # preDeployCommand runs after the build and before the new instance boots,
+    # so a deploy whose migration fails never replaces the running one. Render
+    # only honours this on paid compute plans.
+    #
+    # The same command is in startCommand because this service sits on the
+    # free plan, where preDeployCommand is ignored. Leaving it only in
+    # preDeployCommand would boot free-plan deploys against a schema that has
+    # not been migrated, and the first request would 500.
+    #
+    # Running it twice is harmless: Alembic is idempotent, so the second run
+    # is a no-op that reports "already up to date".
+    preDeployCommand: flask --app wsgi db upgrade
+    startCommand: flask --app wsgi db upgrade && gunicorn wsgi:app --bind 0.0.0.0:$PORT
+    envVars:
+      # Matches the local interpreter. Render's Python runtime reads this, so
+      # a deploy does not silently land on a different minor version than the
+      # one the suite runs on.
+      - key: PYTHON_VERSION
+        value: "3.14"
+      - key: APP_ENV
+        value: production
+      # One Render instance, so the in-process limiter is correct. Move to
+      # Redis before running more than one instance, or the counter is
+      # per-process and the limit becomes a multiple of what was asked for.
+      - key: RATELIMIT_STORAGE_URI
+        value: memory://
+      # Generated once and kept by Render; never committed.
+      - key: SECRET_KEY
+        generateValue: true
+      # Pasted at Blueprint creation: the Neon pooled connection string.
+      # config.py refuses to fall back to anything else in production.
+      - key: DATABASE_URL
+        sync: false

@@ -1,21 +1,43 @@
 {% extends "layout.html" %}
+{% from "_macros.html" import icon, subject_dot %}
 
-{% block title %}
-    Finish
-{% endblock %}
+{% block title %}Save your session{% endblock %}
 
-{% block main %}
-    <h1>Session finished</h1>
-    <h3>Studying: {{subject["category_name"]}}</h3>
-    <h3>Final time: {{final_time}}</h3>
-    <form action="/desc" method="post">
-        <textarea
-            class="form-control mx-auto"
-            name="description"
-            rows="6"
-            placeholder="What did you study?"
-            style="max-width: 600px;"
-        ></textarea>
-        <button class="btn btn-primary" type="submit">Submit</button>
+{% block body %}
+<div class="shell shell--narrow">
+
+    <section class="card card--celebrate">
+
+        <span class="empty__mark mb-4">
+            {{ icon("check", 20) }}
+        </span>
+
+        <p class="tiny mb-2">Session complete</p>
+        <h1 class="display mb-2">{{ final_time }}</h1>
+        <p class="row gap-2 subject-line">
+            {{ subject_dot(0) }}<span>{{ subject.category_name }}</span>
+        </p>
+        <p class="small muted mt-2">Nothing is recorded until you save it below.</p>
+
+    </section>
+
+    <form action="/desc" method="post" class="card mt-4">
+        <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+        <input name="token" type="hidden" value="{{ token }}">
+
+        <div class="field">
+            <label class="field__label" for="description">What did you work on?</label>
+            <textarea class="textarea" id="description" maxlength="5000" name="description"
+                      placeholder="Optional. A line about what you covered makes future sessions easier to place."></textarea>
+            <p class="field__help">Optional, up to 5000 characters. You can leave this blank and add the session as-is.</p>
+        </div>
+
+        <div class="form-actions">
+            <button class="btn btn--primary" type="submit">{{ icon("check", 16) }} <span>Save session</span></button>
+            <a class="btn btn--quiet" href="/">Skip for now</a>
+        </div>
     </form>
+
+</div>
+
 {% endblock %}

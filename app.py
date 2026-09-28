@@ -1,225 +1,119 @@
-import os
-from dotenv import load_dotenv
-from werkzeug.security import check_password_hash, generate_password_hash
-from flask import Flask, flash, redirect, render_template, request, session
-from helpers import login_required
-import sqlite3
-from pathlib import Path
 
-DATABASE = Path(__file__).resolve().parent / "study.db"
+from flask import Flask, render_template, request
 
+from auth import auth_bp
+from categories import categories_bp
+from config import get_config
+from extensions import csrf, db, limiter, migrate
+from timer import timer_bp
 
-def get_db_connection():
-    connection = sqlite3.connect(DATABASE)
-    connection.row_factory = sqlite3.Row
-    return connection
-
-def formatted_time(total_seconds):
-        hours = int(total_seconds/3600)
-        minutes = int((total_seconds % 3600)/60)
-        seconds = total_seconds % 60
-
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+BLUEPRINTS = (auth_bp, categories_bp, timer_bp)
 
 
+def formatted_time(total_seconds: int) -> str:
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+def human_duration(total_seconds: int) -> str:
+    """Compact form for stats: '3h 20m', '45m', '0m'."""
+    total_seconds = max(int(total_seconds or 0), 0)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes = remainder // 60
 
-load_dotenv()
+    if hours and minutes:
+        return f"{hours}h {minutes}m"
+    if hours:
+        return f"{hours}h"
+    if minutes:
+        return f"{minutes}m"
+    if total_seconds:
+        return f"{total_seconds}s"
+    return "0m"
 
-app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY")
-app.jinja_env.filters["duration"] = formatted_time
+
+def create_app(config_name: str | None = None) -> Flask:
+    app = Flask(__name__)
+    app.config.from_object(get_config(config_name))
+
+    db.init_app(app)
+    migrate.init_app(app, db)
+    csrf.init_app(app)
+    limiter.init_app(app)
+
+    for blueprint in BLUEPRINTS:
+        app.register_blueprint(blueprint)
+
+    app.jinja_env.filters["duration"] = formatted_time
+    app.jinja_env.filters["human"] = human_duration
+
+    register_error_handlers(app)
+    register_request_hooks(app)
+    return app
 
 
-@app.route("/")
-@login_required
-def index():
-    connection = get_db_connection()
-    categories = connection.execute("SELECT * FROM categories WHERE user_id = ?", (session["user_id"],)).fetchall()
-    connection.close()
-    return render_template("index.html", categories=categories)
+def register_error_handlers(app: Flask) -> None:
+    @app.errorhandler(400)
+    def bad_request(error):
+        return render_template("error.html", code=400, message="Bad request"), 400
 
-@app.route("/history", methods=["GET", "POST"])
-@login_required
-def history():
-    
-    connection = get_db_connection()
-    subject = connection.execute("SELECT sessions.id, sessions.user_id, category_name, duration, desc, created_at FROM sessions JOIN categories ON sessions.category_id = categories.id WHERE sessions.user_id = ? ORDER BY sessions.created_at DESC", (session["user_id"],)).fetchall()
-    connection.close()
-    return render_template("history.html", subjects=subject)
+    @app.errorhandler(404)
+    def not_found(error):
+        return render_template("error.html", code=404, message="Page not found"), 404
 
-@app.route("/delete-session", methods=["POST"])
-@login_required
-def delete_session():
-    if request.method == "POST":
-        id = request.form.get("id")
-        connection = get_db_connection()
-        connection.execute("DELETE FROM sessions WHERE id = ?", (id,))
-        connection.commit()
-        connection.close()
-        return redirect("/history")
-    
-@app.route("/desc", methods=["GET", "POST"])
-@login_required
-def desc():
-    if request.method == "POST":
-        desc = request.form.get("description")
-        connection = get_db_connection()
-        connection.execute("INSERT INTO sessions (user_id, category_id, duration, desc) VALUES (?, ?, ?, ?)", (session["user_id"], session["selected_category"], session["finish_duration"], desc))
-        connection.commit()
-        connection.close()
-        return redirect("/")
+    @app.errorhandler(403)
+    def forbidden(error):
+        return (
+            render_template("error.html", code=403, message="Not yours to open"),
+            403,
+        )
 
-@app.route("/finish", methods=["GET", "POST"])
-@login_required
-def finish():
-    if request.method == "POST":
-        data = request.get_json()
-        duration = data["duration"]
-    
-        
-        if duration is None:
-            return {"success": False}
-        
-        session["finish_duration"] = duration
-        return {"success": True}
+    @app.errorhandler(413)
+    def too_large(error):
+        return render_template("error.html", code=413, message="Request too large"), 413
 
-    hours = int(session["finish_duration"]/3600)
-    minutes = int((session["finish_duration"] % 3600)/60)
-    seconds = session["finish_duration"] % 60
+    @app.errorhandler(429)
+    def rate_limited(error):
+        return (
+            render_template("error.html", code=429, message="Too many requests, slow down"),
+            429,
+        )
 
-    time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-    
-    connection = get_db_connection()
-    subject = connection.execute("SELECT * FROM categories WHERE id = ? AND user_id = ?", (session["selected_category"], session["user_id"])).fetchone()
-    connection.close()
-    return render_template("finish.html", final_time = time, subject = subject)
+    @app.errorhandler(500)
+    def server_error(error):
+        db.session.rollback()
+        return (
+            render_template("error.html", code=500, message="Something went wrong"),
+            500,
+        )
 
-@app.route("/select-category", methods=["GET", "POST"])
-@login_required
-def select_category():
-    data = request.get_json()
-    category_id = data["category_id"]
-    user_id = session["user_id"]
 
-    connection = get_db_connection()
-    category = connection.execute("SELECT * FROM categories WHERE id = ? AND user_id = ?", (category_id, user_id)).fetchone()
-    connection.close()
-    
-    if category is None:
-        return {"success": False}
-    
-    session["selected_category"] = category_id
-    return {"success": True}
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        # Inline styles are still used for bar heights and a few layout tweaks.
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self'",
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "object-src 'none'",
+    ]
+)
 
-@app.route("/categories", methods=["GET", "POST"])
-@login_required
-def categories():
-    if request.method == "POST":
-        category = request.form.get("category")
-        connection = get_db_connection()
-        connection.execute("INSERT INTO categories (user_id, category_name) VALUES (?, ?)", (session["user_id"], category))
-        connection.commit()
-        connection.close()
 
-    connection = get_db_connection()
-    categories = connection.execute("SELECT * FROM categories WHERE user_id = ?", (session["user_id"],)).fetchall()
-    return render_template("categories.html", categories = categories)
-
-@app.route("/delete-category", methods=["POST"])
-@login_required
-def delete_category():
-    if request.method == "POST":
-        id = request.form.get("id")
-        connection = get_db_connection()
-        connection.execute("DELETE FROM categories WHERE id = ?", (id,))
-        connection.commit()
-        connection.close()
-        return redirect("/categories")
-
-@app.route("/goupdate", methods=["GET", "POST"])
-@login_required
-def goupdate():
-    if request.method == "POST":
-        id = request.form.get("id")
-        new_name = request.form.get("update")
-        connection = get_db_connection()
-        connection.execute("UPDATE categories SET category_name = ? WHERE id = ?", (new_name, id))
-        connection.commit()
-        connection.close()
-        return redirect("/categories")
-
-    category_id = request.args.get("id")
-    return render_template("goupdate.html", id=category_id)
-    
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "POST":
-        
-        username = request.form.get("username")
-        password = request.form.get("password")
-        confirmation = request.form.get("confirmation")
-        if not username or not password:
-            flash("Enter a username and password")
-            return redirect("/register")
-        
-        connection = get_db_connection()
-        check = connection.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchall()
-
-        if len(check) > 0 :
-            connection.close()
-            flash("Please choose a different username")
-            return redirect("/register")
-
-        if password != confirmation:
-            flash("Please enter the same password twice")
-            return redirect("/register")
-
-        connection.execute("INSERT INTO users (username, hash) VALUES(?, ?)", (username, generate_password_hash(password)))
-        connection.commit()
-        connection.close()
-
-        return render_template("login.html")
-
-    else:
-        return render_template("register.html")
-    
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    
-    if request.method == "POST":
-        username = request.form.get("username")
-        if not username:
-            flash("Please enter a username")
-            return redirect("/login")
-
-        password = request.form.get("password")
-        if not password:
-            flash("Please enter a password")
-            return redirect("/login")
-
-        connection = get_db_connection()
-        user = connection.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchall()
-        connection.close()
-
-        if len(user) != 1 or not check_password_hash(user[0]["hash"], password):
-            flash("Please enter a valid username or password")
-            return redirect("/login")
-
-        session["user_id"] = user[0]["id"]
-        print("Logged in")
-        return redirect("/")
-
-    
-    return render_template("login.html")
-
-#Took this one straight from cs50
-@app.route("/logout")
-def logout():
-
-    # Forget any user_id
-    session.clear()
-
-    # Redirect user to login form
-    return redirect("/")
+def register_request_hooks(app: Flask) -> None:
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        if request.is_secure:
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
+        return response

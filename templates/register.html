@@ -1,21 +1,53 @@
 {% extends "layout.html" %}
+{% from "_macros.html" import icon %}
 
-{% block title %}
-    Register
-{% endblock %}
+{% block title %}Create account{% endblock %}
 
-{% block main %}
-    <h3>Register</h3>
-    <form action="/register" method="post">
-        <div class="mb-3">
-            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" name="username" placeholder="New Username" type="text">
+{% block body %}
+<div class="shell shell--narrow">
+
+    <section class="card">
+        <div class="card__head">
+            <h1 class="h1">Create your account</h1>
         </div>
-        <div class="mb-3">
-            <input class="form-control mx-auto w-auto" name="password" placeholder="New Password" type="password">
-        </div>
-        <div class="mb-3">
-            <input class="form-control mx-auto w-auto" name="confirmation" placeholder="Confirm Password" type="password">
-        </div>
-        <button class="btn btn-primary" type="submit">Register</button>
-    </form>
+        <p class="small muted mb-6">Subjects and sessions stay private to your account.</p>
+
+        <form action="/register" method="post">
+            <input name="csrf_token" type="hidden" value="{{ csrf_token() }}">
+
+            <div class="stack">
+                <div class="field">
+                    <label class="field__label" for="username">Username</label>
+                    <input autocomplete="username" autofocus class="input" id="username"
+                           maxlength="64" name="username" required type="text">
+                    <p class="field__help">This is what you log in with. It cannot be changed later.</p>
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="password">Password</label>
+                    <input autocomplete="new-password" class="input" id="password"
+                           name="password" required type="password">
+                    <p class="field__help">At least 8 characters.</p>
+                </div>
+
+                <div class="field">
+                    <label class="field__label" for="confirmation">Confirm password</label>
+                    <input autocomplete="new-password" class="input" id="confirmation"
+                           name="confirmation" required type="password">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn--primary btn--block btn--lg" type="submit">Create account</button>
+            </div>
+        </form>
+
+        <hr class="divider">
+
+        <p class="small muted text-center">
+            Already have one? <a class="link-accent" href="/login">Log in</a>
+        </p>
+    </section>
+
+</div>
 {% endblock %}

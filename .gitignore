@@ -8,6 +8,12 @@ __pycache__/
 # Flask
 instance/
 
+# Testing and coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
 # SQLite database
 *.db
 

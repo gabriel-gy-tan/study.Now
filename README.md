@@ -1,18 +1,143 @@
-# study.Now() ~ CS50x Final Project
-#### Video Demo:  https://youtu.be/HFob03URjOE
-#### Description:
-A simple study tracker web application that allows users to create studying categories and then start a timer to record their studying sessions. They can then choose to save their session or delete it and then view their saved sessions in the history tab.
+# study.Now()
 
-#### SQL
-The backend is all using an SQLite database that has 3 distinct tables: users, categories, sessions. Users table includes an ID, username, and password and that ID is used across as a foreign key. Categories table includes a similar ID for each category and references the user id and also keeps track of the category names which users create. And finally there is the sessions table which again uses its own unique ID but references both the category ID and the user ID, it keeps track of the date and time which it was submitted along with how long a session was and the user's description of that session.
+A study-time tracker. Register, create subjects, run a timer, and save what you
+studied. History keeps every session and shows where the time went.
 
-#### Pages
-There is a simple log-in and registration page which is similar to CS50's finance problem allowing users to register for their own username and password and then use that username and password to bring themselves into the main pages. All functions also use a similar @login_required funciton as the one in the Finance problem.
+Originally a CS50x final project. The application has since been rebuilt on
+PostgreSQL with a hand-written front end; the original project write-up is kept
+in [docs/cs50-original.md](docs/cs50-original.md) for reference.
 
-There is a category page allowing users to add new studying categories and allows them to view all their existing ones, they can also delete categories or update the names of the categories. By using forms and POST requests I was able to use flask to have the routing talk to the SQL database and from there I could use request.form.get in order to get the specific names which the user wanted and then input them into the database. The delete button is similar to the FROSHIMS page from the lecture and includes the ID of the category and removes it from the table when clicked. The update button is similar but it retains that id information when moving to the update page so that when the user changes the category name SQL will know which category to change the name of.
+#### Video demo (original build): https://youtu.be/HFob03URjOE
 
-The frontpage is the main part which uses JavaScript to create a functioning stopwatch at the very front. It allows users to choose from a select menu which includes all of the categories created. The user can then start the stopwatch and upon pressing the stop button, they can press the continue button to continue with that session, they can delete the session, or they can finish and save the session. Using javascript's fetch() function, I created the page which allows the page to work without needing to continuously refresh everytime the user chooses a categroy making it a lot faster. But the main function of the timer page was the main difficulty. I had a lot of fun learning how to implement it but the simple way it works is that upon pressing the start button it uses the date.Now() function, which is where the name study.Now() comes from, to record when the start button was first clicked. Then when you press stop it records the date.Now() again and then takes the difference between the two to get the amount of miliseconds between the two presses. Which allows you to then calculate the time which has passed. That works if it is just start and stop but the page also allows for a continue. That made it so I needed to use another variable which is named "elapsedbeforepause" which calculates the amount of time which passed before the user paused the timer and then when they unpause the timer again it records the amount of time since they unpaused the timer and when they next pause the timer + the elapsed time before they paused the first time. That explanation is a little hard to read but it is basically combining the two intervals of time passed before and after the pausing to get the total amount of time which they studied for. Then in order to display the actual timer itself, using some math you can work out the hours, minutes, and seconds from the miliseconds and then using the f string equivalent in javascript you can change that timer display/
+## Stack
 
-The delete button of the timer is simple as it just resets all the variables back to the original state and changes the timer back to zero to reset the session. Then the finish session button will bring the user to the description page where the user writes a short description about what they learned and then all of that is stored into the database with the duration of the session being stored in miliseconds.
+- Flask application factory, blueprints, Jinja2
+- PostgreSQL via `psycopg` 3, SQLAlchemy 2, Alembic through Flask-Migrate
+- Flask-WTF CSRF, Flask-Limiter, Werkzeug
+- Hand-written CSS and two plain JavaScript files. No CSS framework, no build
+  step, no front-end dependencies.
 
-Then the last page is the history page which works similarly to the history page in the finance problem or the registration page in the week 9 lecture. Essentially I just grab all of the sessions in the sessions table which is related to the user who is logged in and then I sort them DESC so that it shows the latest session at the very top. I created a small jinja function which also changes the miliseconds of the session into the hours, minutes, and seconds and then use an f string to format them which is then passed into the HTML page. Then like the categories page there is a delete button which is generated for each session and works the same as the one in the categories page, using an SQL query to delete the value of that session ID from the table.
+## How it works
+
+`/login` and `/register` use hashed passwords. Everything else is behind
+`@login_required`, and every category and session query is filtered on the
+session's `user_id`, so one account can never read or change another's rows.
+
+The timer lives in `static/timer.js` and talks to two JSON endpoints:
+
+| Request | Payload | Header |
+| --- | --- | --- |
+| `POST /select-category` | `{"category_id": 3}` | `X-CSRFToken` |
+| `POST /finish` | `{"duration": 3725, "category_id": 3}` | `X-CSRFToken` |
+
+`duration` is whole seconds, greater than zero and at most 24 hours. The client
+mirrors that limit so an over-long session is refused with a message instead of
+a bare `400`.
+
+`category_id` travels with the finish rather than relying on the earlier
+`/select-category` call having landed: a browser restoring a `<select>` does not
+raise a `change` event, so the server can be owed a subject it was never told
+about. Both routes look the subject up with `load_owned`, so an id that does not
+exist is `404` and one belonging to someone else is `403`.
+
+`POST /finish` stages the session in the session cookie. `GET /finish` moves it
+behind a single-use token and renders the description form, so revisiting the
+page or pressing Back cannot save the same session twice or invent one that was
+never studied. `POST /desc` consumes the token and writes the row.
+
+The subject is locked for the whole of a run, not just once a second has passed,
+so a stray scroll over the select cannot re-file the session under a different
+subject. An in-progress timer is kept in `localStorage` under a key scoped to
+the signed-in user and is cleared on logout.
+
+### Database
+
+Three tables: `users`, `categories`, `sessions`. Foreign keys cascade, so
+deleting a subject deletes its sessions. Subject names are unique per user and
+compared case-insensitively, enforced both in `categories.py` and by a
+functional unique index.
+
+A real session is only ever written from the caller's own rows; `stats.py` sums
+what already exists and never stores an aggregate. Days are bucketed in UTC
+until there is a user-timezone column.
+
+## Running it locally
+
+You need a PostgreSQL database. The old SQLite file is not used and there is no
+migration path for it.
+
+```powershell
+git clone https://github.com/gabriel-gy-tan/study.Now.git
+cd study.Now
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Then fill in `.env`:
+
+| Variable | Purpose |
+| --- | --- |
+| `SECRET_KEY` | Session signing. Generate one; never commit it. |
+| `DATABASE_URL` | The database the app runs against. |
+| `TEST_DATABASE_URL` | A **throwaway** database for the test suite. |
+| `RATELIMIT_STORAGE_URI` | `memory://` is fine for a single instance. |
+| `APP_ENV` | `development`, `testing`, or `production`. |
+
+`config.py` refuses to build the testing config without `TEST_DATABASE_URL`,
+because the suite truncates tables between tests and must never point at real
+data.
+
+```powershell
+.\.venv\Scripts\python.exe -m flask --app wsgi db upgrade
+.\.venv\Scripts\python.exe -m flask --app wsgi run
+```
+
+## Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+The suite needs `TEST_DATABASE_URL` to point at an empty database; it runs the
+migrations once and truncates between tests.
+
+`tests/js/timer_harness.js` loads the real `static/timer.js` against a stub DOM
+and a fake clock, so timer behaviour is asserted rather than inferred from the
+markup - a button with no handler passes every template check. Pytest runs it and
+**skips that test if `node` is not on `PATH`**, so a machine without Node still
+gets everything else. Run it on its own with:
+
+```powershell
+node tests\js\timer_harness.js
+```
+
+## Deployment
+
+`render.yaml` is a Render Blueprint: one web service pointed at Neon. The
+database is external, so it is not declared in the file.
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `DATABASE_URL` | `sync: false` | Pasted into the Render dashboard at Blueprint creation, so the production string never lands in the repository. |
+| `SECRET_KEY` | `generateValue: true` | Generated once and held by Render. |
+| `APP_ENV` | `production` | Selects `ProductionConfig`: `DEBUG = False`, `SESSION_COOKIE_SECURE = True`. |
+| `RATELIMIT_STORAGE_URI` | `memory://` | Correct for a single instance. |
+| `PYTHON_VERSION` | `3.14` | Matches the interpreter the suite runs on. |
+
+**Use Neon's pooled endpoint** - the hostname containing `-pooler`. Render keeps
+several connections open across a deploy, which is exactly what a direct
+endpoint is rate limited against. And **never point `DATABASE_URL` at the test
+branch**: the suite truncates it.
+
+Migrations run on every deploy. `flask --app wsgi db upgrade` appears in both
+`preDeployCommand` and `startCommand`, and the second one is what actually does
+the work: Render only honours `preDeployCommand` on paid compute plans, and this
+service sits on the free plan. If the migration fails the boot aborts, so Render
+keeps the previous instance serving instead of swapping onto a half-migrated
+schema. Alembic is idempotent, so where both run the second reports "already up
+to date".
+
+`gunicorn` serves `wsgi:app`. `wsgi.py` wraps the app in `ProxyFix` so that
+`X-Forwarded-Proto` is trusted, which is what makes secure cookies and HSTS work
+behind Render's TLS terminator. Never run gunicorn on Windows; it is Linux-only.

@@ -1,26 +1,193 @@
 {% extends "layout.html" %}
+{% from "_macros.html" import icon, stat, empty_state, subject_dot %}
 
-{% block title %}
-    Register
+{% block title %}Focus{% endblock %}
+
+{% block content %}
+
+<header class="page-head">
+    <div class="page-head__text">
+        <h1 class="h1">Focus</h1>
+        <p class="small muted">Pick a subject, start the timer, and keep the session for what it is worth.</p>
+    </div>
+</header>
+
+<div class="grid grid--split">
+
+    <div class="stack stack--loose">
+
+        {% if not categories %}
+            <div class="card">
+                {{ empty_state(
+                    mark="layers",
+                    title="No subjects yet",
+                    text="A subject is just a label for a kind of work, like Maths or Reading. Create one and it shows up here and in your history.",
+                    action_url="/categories",
+                    action_label="Create a subject"
+                ) }}
+            </div>
+        {% endif %}
+
+        <section class="timer-card" data-state="idle" data-timer-card data-user-id="{{ session.get('user_id') or '' }}">
+            <div class="timer-lock" data-timer-lock>
+                <span>{{ icon("info", 18) }}</span>
+                <span data-timer-lock-text>Choose a subject before you start.</span>
+            </div>
+
+            {# The toggle sits beside the state rather than inside it: the state
+               paragraph is a live region, so a label change inside it would be
+               announced as though the timer's status had changed. #}
+            <div class="timer-statebar">
+                <p class="timer-state" aria-live="polite" role="status">
+                    <span class="timer-state__dot"></span>
+                    <span data-timer-state>Ready</span>
+                </p>
+                <button class="btn btn--sm btn--quiet timer-fullscreen" data-timer-fullscreen
+                        aria-pressed="false" type="button">
+                    {{ icon("expand", 18) }}
+                    <span data-timer-fullscreen-label>Full screen</span>
+                </button>
+            </div>
+
+            <p class="timer-card__subject">
+                {{ subject_dot(0) }}
+                <span data-timer-subject>No subject chosen</span>
+            </p>
+
+            <output class="timer-readout" aria-hidden="true" data-timer-readout>00:00:00</output>
+            <p class="visually-hidden" data-timer-readout-live aria-live="polite"></p>
+
+            {% if categories %}
+                <div class="field mb-6">
+                    <label class="field__label" for="category">Subject</label>
+                    <select class="select" data-empty="true" id="category" name="category" required>
+                        <option disabled value="">Choose a subject</option>
+                        {% for category in categories %}
+                            <option value="{{ category.id }}"
+                                    {% if category.id == session.get('selected_category') %}selected{% endif %}>
+                                {{ category.category_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
+
+            <div class="timer-controls">
+                <button class="btn btn--primary btn--lg" data-timer-start type="button">
+                    {{ icon("play", 18) }} <span>Start</span>
+                </button>
+                <button class="btn btn--lg" data-timer-pause hidden type="button">
+                    {{ icon("pause", 18) }} <span>Pause</span>
+                </button>
+                <button class="btn btn--lg" data-timer-resume hidden type="button">
+                    {{ icon("play", 18) }} <span>Resume</span>
+                </button>
+                <button class="btn btn--lg" data-timer-discard hidden type="button">
+                    Discard
+                </button>
+                <button aria-disabled="true" class="btn btn--primary btn--lg"
+                        data-timer-finish disabled type="button">
+                    {{ icon("flag", 18) }} <span data-timer-finish-label>Finish session</span>
+                </button>
+            </div>
+
+            <p class="timer-hint">Your timer keeps running if you switch tabs or come back later.</p>
+        </section>
+
+        {% if recent_sessions %}
+            <section class="card card--flush">
+                <div class="card__head card__head--bordered">
+                    <h2 class="h3">Recent sessions</h2>
+                    <a class="btn btn--quiet btn--sm" href="/history">View all {{ icon("arrow-right", 16) }}</a>
+                </div>
+                <div class="card__body stack">
+                    {% for item in recent_sessions %}
+                        <div class="row row--between gap-4">
+                            <span class="row gap-2">
+                                {{ subject_dot(loop.index0) }}
+                                <span class="h3">{{ item.category.category_name }}</span>
+                            </span>
+                            <span class="row gap-4">
+                                <span class="small muted">{{ item.created_at.strftime("%d %b, %H:%M") }}</span>
+                                <span class="num small text-strong">{{ item.duration | human }}</span>
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+
+    </div>
+
+    <aside class="page-aside stack">
+
+        <section class="grid grid--stats grid--stats-stacked">
+            {{ stat("Today", stats.today | human, stats.today_sessions ~ " session" ~ ("s" if stats.today_sessions != 1 else ""), accent=True) }}
+            {{ stat("This week", stats.week | human) }}
+            {{ stat("All time", stats.total | human, stats.sessions ~ " session" ~ ("s" if stats.sessions != 1 else "")) }}
+        </section>
+
+        <section class="card">
+            <div class="card__head">
+                <h2 class="h3">Last {{ series | length }} days</h2>
+                <span class="tiny">UTC</span>
+            </div>
+
+            {% set peak = series | map(attribute="seconds") | max %}
+            <div class="bars">
+                {% for day in series %}
+                    <div class="bars__col">
+                        <span class="visually-hidden">{{ day.full_label }}: {{ day.seconds | human }}</span>
+                        <div class="bars__plot">
+                            <div class="bars__bar{% if day.seconds == 0 %} bars__bar--empty{% endif %}"
+                                 data-today="{{ 'true' if day.is_today else 'false' }}"
+                                 style="--bar: {{ (day.seconds / peak * 100) | round(1) if peak else 0 }}%"></div>
+                        </div>
+                        <span class="bars__label{% if day.is_today %} bars__label--today{% endif %}">{{ day.label }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card__head">
+                <h2 class="h3">Where your time goes</h2>
+            </div>
+
+            {% if subjects %}
+                <div class="split-bar" role="img"
+                     aria-label="Share of study time by subject">
+                    {% for subject in subjects %}
+                        <span class="split-bar__seg" style="width: {{ subject.share | round(1) }}%"></span>
+                    {% endfor %}
+                </div>
+                <div class="legend">
+                    {% for subject in subjects %}
+                        <div class="legend__row">
+                            {{ subject_dot(loop.index0) }}
+                            <span class="legend__name">{{ subject.name }}</span>
+                            <span class="legend__value">{{ subject.seconds | human }}</span>
+                        </div>
+                    {% endfor %}
+                    {% if subject_count > subjects | length %}
+                        <p class="tiny mt-2">+{{ subject_count - subjects | length }} more subject{{ "" if subject_count - subjects | length == 1 else "s" }}</p>
+                    {% endif %}
+                </div>
+            {% else %}
+                <p class="small muted">
+                    {{ "Once you save a session, your time per subject shows up here as a simple split." if categories else "Create a subject and start a session to see this breakdown." }}
+                </p>
+            {% endif %}
+        </section>
+
+    </aside>
+
+</div>
+
 {% endblock %}
 
-{% block main %}
-    <h1>Study Tracker</h1>
-
-    <select id="category">
-        <option value="" disabled selected>Choose Category</option>
-        {% for category in categories %}
-            <option value='{{category["id"]}}'>
-                {{ category["category_name"] }}
-            </option>
-        {% endfor %}
-    </select>
-
-    <h2 id="timer">00:00:00</h2>
-    <button id = "start">START</button>
-    <button id = "stop">STOP</button>
-    <button id = "continued">CONTINUE</button>
-    <button id = "delete">DELETE</button>
-    <button id = "finish">FINISH</button>
-    <script src="{{ url_for('static', filename='timer.js') }}"></script>
+{% block scripts %}
+    {% if categories %}
+        <script src="/static/timer.js"></script>
+    {% endif %}
 {% endblock %}
